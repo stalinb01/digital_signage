@@ -1,0 +1,21 @@
+# Entornos virtuales (MUY IMPORTANTE)
+venv/
+env/
+.env
+
+# Archivos temporales de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribución / Paquetes
+dist/
+build/
+*.egg-info/
+
+# Archivos de configuración del editor (VS Code / PyCharm)
+.vscode/
+.idea/
+
+# Variables de entorno (Contraseñas/Keys)
+.env

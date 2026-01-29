@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pantalla {{ screen_id }} - Digital Signage</title>
+    
+    <!-- Estilos de Slides -->
+    {% include 'components/slide_styles.html' %}
+    
+    <!-- Estilos de Marquesina (condicional) -->
+    {% if marquee_enabled %}
+    {% include 'components/marquee.html' %}
+    {% endif %}
+</head>
+<body>
+    <div class="loading" id="loading">Cargando presentación...</div>
+    <div class="slide-container" id="slideContainer"></div>
+    
+    <!-- Marquesina (condicional) -->
+    {% if marquee_enabled %}
+    <div class="marquee-footer">
+        <div class="marquee-text">{{ marquee_text }}</div>
+    </div>
+    {% endif %}
+    
+    <script>
+        // Datos de los slides pasados desde Flask
+        const slides = {{ slides_json | safe }};
+        let currentSlideIndex = 0;
+        let slideTimeout;
+        let isTransitioning = false;
+        
+        function createSlideElement(slide, index) {
+            const div = document.createElement('div');
+            div.className = 'slide';
+            div.id = 'slide-' + index;
+
+            if (slide.type === 'image') {
+                const img = document.createElement('img');
+                img.src = slide.url;
+                div.appendChild(img);
+            } 
+            else if (slide.type === 'video') {
+                const video = document.createElement('video');
+                video.src = slide.url;
+                video.autoplay = true;
+                video.muted = true;
+                video.loop = true;
+                div.appendChild(video);
+            }
+            else if (slide.type === 'youtube') {
+                const iframe = document.createElement('iframe');
+                const vId = slide.video_id;
+                iframe.src = `https://www.youtube.com/embed/${vId}?autoplay=1&mute=1&controls=0&loop=1&playlist=${vId}`;
+                iframe.allow = 'autoplay; encrypted-media';
+                div.appendChild(iframe);
+            }
+            return div;
+        }
+        
+        function initSlides() {
+            const container = document.getElementById('slideContainer');
+            slides.forEach((slide, index) => {
+                const slideElement = createSlideElement(slide, index);
+                container.appendChild(slideElement);
+            });
+            
+            document.getElementById('loading').style.display = 'none';
+            
+            if (slides.length > 0) {
+                showSlide(0);
+            }
+        }
+        
+        function showSlide(index) {
+            if (isTransitioning || slides.length === 0) return;
+            
+            isTransitioning = true;
+            const allSlides = document.querySelectorAll('.slide');
+            const currentSlide = allSlides[currentSlideIndex];
+            const nextSlide = allSlides[index];
+            const transition = slides[index].transition || 'fade';
+            
+            // Limpiar slide actual
+            if (currentSlide) {
+                const videoId = currentSlide.getAttribute('data-video-id');
+                if (videoId) {
+                    const video = document.getElementById(videoId);
+                    if (video) {
+                        video.pause();
+                        video.currentTime = 0;
+                    }
+                }
+                
+                const youtubeId = currentSlide.getAttribute('data-youtube-id');
+                if (youtubeId) {
+                    const container = currentSlide.querySelector('[id^="playerContainer-"]');
+                    if (container) {
+                        container.innerHTML = '';
+                    }
+                }
+                
+                if (transition === 'slide') {
+                    currentSlide.classList.add('slide-exiting');
+                } else if (transition === 'zoom') {
+                    currentSlide.classList.add('zoom-exiting');
+                } else {
+                    currentSlide.classList.add('fade-out');
+                }
+            }
+            
+            // Mostrar siguiente slide
+            setTimeout(() => {
+                if (currentSlide) {
+                    currentSlide.classList.remove('active', 'slide-exiting', 'zoom-exiting', 'fade-out');
+                }
+                
+                if (transition === 'slide') {
+                    nextSlide.classList.add('slide-entering');
+                } else if (transition === 'zoom') {
+                    nextSlide.classList.add('zoom-entering');
+                }
+                
+                nextSlide.classList.add('active');
+                
+                setTimeout(() => {
+                    nextSlide.classList.remove('slide-entering', 'zoom-entering');
+                    currentSlideIndex = index;
+                    isTransitioning = false;
+                    
+                    const youtubeId = nextSlide.getAttribute('data-youtube-id');
+                    const videoId = nextSlide.getAttribute('data-video-id');
+                    
+                    if (youtubeId) {
+                        const container = nextSlide.querySelector('[id^="playerContainer-"]');
+                        if (container) {
+                            const ancho = window.innerWidth;
+                            const alto = window.innerHeight;
+                            
+                            const iframe = document.createElement('iframe');
+                            iframe.id = `ytPlayer-${index}`;
+                            iframe.width = ancho;
+                            iframe.height = alto;
+                            iframe.src = `https://www.youtube.com/embed/${youtubeId}?autoplay=1&mute=1&rel=0&origin=${window.location.origin}`;
+                            iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen";
+                            iframe.setAttribute('allowfullscreen', '');
+                            
+                            container.appendChild(iframe);
+                        }
+                        
+                        clearTimeout(slideTimeout);
+                        slideTimeout = setTimeout(() => {
+                            const nextIndex = (currentSlideIndex + 1) % slides.length;
+                            showSlide(nextIndex);
+                        }, slides[index].duration * 1000);
+                        
+                    } else if (videoId) {
+                        const video = document.getElementById(videoId);
+                        if (video) {
+                            video.currentTime = 0;
+                            const playPromise = video.play();
+                            
+                            if (playPromise !== undefined) {
+                                playPromise.then(() => {
+                                    console.log('Video reproduciendo');
+                                }).catch(err => {
+                                    console.error('Error reproduciendo video:', err);
+                                    setTimeout(() => video.play(), 200);
+                                });
+                            }
+                            
+                            clearTimeout(slideTimeout);
+                            slideTimeout = setTimeout(() => {
+                                video.pause();
+                                const nextIndex = (currentSlideIndex + 1) % slides.length;
+                                showSlide(nextIndex);
+                            }, slides[index].duration * 1000);
+                        }
+                    } else {
+                        clearTimeout(slideTimeout);
+                        slideTimeout = setTimeout(() => {
+                            const nextIndex = (currentSlideIndex + 1) % slides.length;
+                            showSlide(nextIndex);
+                        }, slides[index].duration * 1000);
+                    }
+                }, 50);
+            }, transition === 'fade' ? 500 : 800);
+        }
+        
+        // Iniciar presentación
+        window.addEventListener('load', () => {
+            initSlides();
+        });
+        
+        // Re-ajustar iframes de YouTube al redimensionar
+        window.addEventListener('resize', () => {
+            document.querySelectorAll('[id^="ytPlayer-"]').forEach(iframe => {
+                iframe.width = window.innerWidth;
+                iframe.height = window.innerHeight;
+            });
+        });
+        
+        // Detener transiciones al salir
+        window.addEventListener('beforeunload', () => {
+            clearTimeout(slideTimeout);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Signage - Panel de Administración</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px 0;
+        }
+        
+        .main-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .screen-card {
+            transition: all 0.3s;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        
+        .screen-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+            border-color: #667eea;
+        }
+        
+        .screen-card.active {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        
+        .slide-item {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            transition: all 0.3s;
+            cursor: move;
+        }
+        
+        .slide-item.editing {
+            border-color: #ffc107;
+            background: #fffbf0;
+        }
+        
+        .slide-item:hover {
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+        
+        .slide-preview {
+            width: 100px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 5px;
+        }
+        
+        .btn-gradient {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+        }
+        
+        .btn-gradient:hover {
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+            color: white;
+        }
+        
+        .drag-handle {
+            cursor: grab;
+            color: #999;
+        }
+        
+        .drag-handle:active {
+            cursor: grabbing;
+        }
+        
+        .sortable-ghost {
+            opacity: 0.4;
+            background: #e3f2fd;
+        }
+        
+        .badge-slide-type {
+            font-size: 0.75rem;
+            padding: 5px 10px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+        
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 20px;
+        }
+        
+        .transition-badge {
+            font-size: 0.7rem;
+        }
+        .admin-nav {
+            background: #333;
+            color: white;
+            padding: 10px 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .nav-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .nav-container h1 {
+            font-size: 1.2rem;
+            margin: 0;
+        }
+
+        .btn-logout {
+            background-color: #e74c3c;
+            color: white;
+            text-decoration: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            transition: background 0.3s ease;
+        }
+
+        .btn-logout:hover {
+            background-color: #c0392b;
+        }
+    </style>
+</head>
+<body>
+    <nav class="admin-nav">
+    <div class="nav-container">
+        <h1>Administración de Pantallas</h1>
+        <a href="{{ url_for('logout') }}" class="btn-logout">
+            <span>🚪</span> Cerrar Sesión
+        </a>
+    </div>
+    </nav>
+    <div class="container-fluid">
+        <div class="main-container">
+            <div class="header">
+                <h1><i class="fas fa-tv"></i> Digital Signage</h1>
+                <p class="mb-0">Sistema de gestión de pantallas y contenido</p>
+            </div>
+            
+            <div class="container-fluid p-4">
+                <div class="row">
+                    <!-- Panel de pantallas -->
+                    <div class="col-md-3">
+                        <h4 class="mb-3"><i class="fas fa-display"></i> Pantallas</h4>
+                        <div id="screensList"></div>
+                        
+                        <div class="mt-4">
+                            <button class="btn btn-success w-100" id="btnGeneratePresentation" disabled>
+                                <i class="fas fa-play-circle"></i> Generar Presentación
+                            </button>
+                            <a href="#" class="btn btn-info w-100 mt-2" id="btnViewPresentation" target="_blank" style="display:none;">
+                                <i class="fas fa-external-link-alt"></i> Ver Presentación
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <!-- Panel de edición -->
+                    <div class="col-md-9">
+                        <div id="editorPanel" style="display:none;">
+                    <!-- Marquesina -->
+                            <div class="card mb-4 border-info">
+                                <div class="card-header bg-info text-white">
+                                    <i class="fas fa-cog"></i> Ajustes de la Pantalla (Marquesina)
+                                </div>
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-3">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="marqueeEnabled">
+                                                <label class="form-check-label" for="marqueeEnabled">Activar Marquesina</label>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-9">
+                                            <div class="input-group">
+                                                <span class="input-group-text">Texto:</span>
+                                                <input type="text" id="marqueeText" class="form-control" placeholder="Ej: ¡Bienvenidos a la empresa! | El tipo de cambio hoy es... ">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        <!-- Fin Marquesina -->
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h4 class="mb-0"><i class="fas fa-edit"></i> Editor de Contenido - <span id="currentScreenName"></span></h4>
+                                <button class="btn btn-primary" id="btnSaveConfig">
+                                    <i class="fas fa-save"></i> Guardar Cambios
+                                </button>
+                            </div>
+                            
+                            <!-- Formulario de agregar contenido -->
+                            <div class="card mb-4">
+                                <div class="card-header bg-primary text-white">
+                                    <i class="fas fa-plus-circle"></i> Agregar Contenido
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label class="form-label">Tipo de contenido</label>
+                                                <select class="form-select" id="contentType">
+                                                    <option value="image">Imagen Local</option>
+                                                    <option value="video">Video Local</option>
+                                                    <option value="youtube">Video de YouTube</option>
+                                                </select>
+                                            </div>
+                                            
+                                            <div id="imageUploadGroup" class="mb-3">
+                                                <label class="form-label">Subir imagen</label>
+                                                <input type="file" class="form-control" id="imageFile" accept="image/*">
+                                                <small class="text-muted">Formatos: JPG, PNG, GIF (Max 500MB)</small>
+                                            </div>
+                                            
+                                            <div id="videoUploadGroup" class="mb-3" style="display:none;">
+                                                <label class="form-label">Subir video</label>
+                                                <input type="file" class="form-control" id="videoFile" accept="video/*">
+                                                <small class="text-muted">Formatos: MP4, AVI, MOV, WebM, MKV (Max 500MB)</small>
+                                            </div>
+                                            
+                                            <div id="youtubeUrlGroup" class="mb-3" style="display:none;">
+                                                <label class="form-label">ID de YouTube</label>
+                                                <input type="text" class="form-control" id="youtubeUrl" placeholder="Ej: dQw4w9WgXcQ" maxlength="11">
+                                                <small class="text-muted">Solo el ID del video (11 caracteres). Ejemplo: dQw4w9WgXcQ</small>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label class="form-label">Duración (segundos)</label>
+                                                <input type="number" class="form-control" id="slideDuration" value="10" min="1" max="3600">
+                                                <small class="text-muted" id="durationHint">Tiempo que se mostrará el slide</small>
+                                            </div>
+                                            
+                                            <div class="mb-3">
+                                                <label class="form-label">Efecto de transición</label>
+                                                <select class="form-select" id="slideTransition">
+                                                    <option value="fade">Fade (Desvanecimiento)</option>
+                                                    <option value="slide">Slide (Deslizamiento)</option>
+                                                    <option value="zoom">Zoom (Acercamiento)</option>
+                                                </select>
+                                            </div>
+                                            
+                                            <button class="btn btn-gradient w-100" id="btnAddSlide">
+                                                <i class="fas fa-plus"></i> Agregar a la presentación
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Lista de slides -->
+                            <div class="card">
+                                <div class="card-header bg-secondary text-white">
+                                    <i class="fas fa-images"></i> Slides de la presentación
+                                    <span class="badge bg-light text-dark ms-2" id="slideCount">0</span>
+                                </div>
+                                <div class="card-body">
+                                    <div id="slidesList"></div>
+                                    <div id="emptyState" class="empty-state">
+                                        <i class="fas fa-image"></i>
+                                        <h5>No hay slides</h5>
+                                        <p>Agrega imágenes o videos de YouTube para comenzar</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div id="welcomePanel">
+                            <div class="empty-state" style="padding: 100px 20px;">
+                                <i class="fas fa-hand-pointer"></i>
+                                <h3>Bienvenido al Panel de Administración</h3>
+                                <p>Selecciona una pantalla de la izquierda para comenzar a editar</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast de notificaciones -->
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+        <div id="toast" class="toast" role="alert">
+            <div class="toast-header">
+                <strong class="me-auto">Notificación</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body"></div>
+        </div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <script>
+        let currentScreen = null;
+        let currentConfig = null;
+        let sortable = null;
+        
+        // Inicializar
+        document.addEventListener('DOMContentLoaded', () => {
+            loadScreens();
+            setupEventListeners();
+        });
+        
+        function setupEventListeners() {
+            document.getElementById('contentType').addEventListener('change', toggleContentFields);
+            document.getElementById('btnAddSlide').addEventListener('click', addSlide);
+            document.getElementById('btnSaveConfig').addEventListener('click', saveConfiguration);
+            document.getElementById('btnGeneratePresentation').addEventListener('click', generatePresentation);
+        }
+        
+        function toggleContentFields() {
+            const type = document.getElementById('contentType').value;
+            const durationHint = document.getElementById('durationHint');
+            
+            document.getElementById('imageUploadGroup').style.display = type === 'image' ? 'block' : 'none';
+            document.getElementById('videoUploadGroup').style.display = type === 'video' ? 'block' : 'none';
+            document.getElementById('youtubeUrlGroup').style.display = type === 'youtube' ? 'block' : 'none';
+            
+            // Actualizar hint de duración
+            if (type === 'video') {
+                durationHint.textContent = 'Duración máxima del video (se detendrá si alcanza este tiempo)';
+            } else if (type === 'youtube') {
+                durationHint.textContent = 'Tiempo que se mostrará el video de YouTube';
+            } else {
+                durationHint.textContent = 'Tiempo que se mostrará la imagen';
+            }
+        }
+        
+        async function loadScreens() {
+            try {
+                const response = await fetch('/api/screens');
+                const screens = await response.json();
+                
+                const screensList = document.getElementById('screensList');
+                screensList.innerHTML = screens.map(screen => `
+                    <div class="card screen-card mb-2" onclick="selectScreen(${screen.id})">
+                        <div class="card-body">
+                            <h6 class="mb-1">
+                                <i class="fas fa-tv"></i> ${screen.name}
+                            </h6>
+                            <small class="text-muted">
+                                ${screen.slides_count} slides
+                                ${screen.has_content ? '<span class="badge bg-success">Con contenido</span>' : '<span class="badge bg-secondary">Vacía</span>'}
+                            </small>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                showToast('Error al cargar pantallas', 'danger');
+            }
+        }
+        
+        async function selectScreen(screenId) {
+            currentScreen = screenId;
+            
+            // Actualizar UI
+            document.querySelectorAll('.screen-card').forEach(card => card.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            
+            document.getElementById('welcomePanel').style.display = 'none';
+            document.getElementById('editorPanel').style.display = 'block';
+            document.getElementById('currentScreenName').textContent = `Pantalla ${screenId}`;
+            document.getElementById('btnGeneratePresentation').disabled = false;
+            
+            // Cargar configuración
+            await loadScreenConfig(screenId);
+        }
+        
+        async function loadScreenConfig(screenId) {
+            try {
+                const response = await fetch(`/api/screen/${screenId}`);
+                currentConfig = await response.json();
+                // --- NUEVAS LÍNEAS PARA LA MARQUESINA ---
+                document.getElementById('marqueeEnabled').checked = currentConfig.marquee_enabled || false;
+                document.getElementById('marqueeText').value = currentConfig.marquee_text || "";
+                // ----------------------------------
+                renderSlides();
+            } catch (error) {
+                showToast('Error al cargar configuración', 'danger');
+            }
+        }
+        
+        function renderSlides() {
+            const slidesList = document.getElementById('slidesList');
+            const emptyState = document.getElementById('emptyState');
+            const slides = currentConfig.slides || [];
+            
+            document.getElementById('slideCount').textContent = slides.length;
+            
+            if (slides.length === 0) {
+                slidesList.innerHTML = '';
+                emptyState.style.display = 'block';
+                return;
+            }
+            
+            emptyState.style.display = 'none';
+            slidesList.innerHTML = slides.map((slide, index) => `
+                <div class="slide-item" data-index="${index}" data-slide-id="${slide.id}" id="slide-item-${slide.id}">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <i class="fas fa-grip-vertical drag-handle"></i>
+                        </div>
+                        <div class="col-auto">
+                            ${slide.type === 'image' ? 
+                                `<img src="${slide.url}" class="slide-preview" alt="Slide">` :
+                                slide.type === 'video' ?
+                                `<div class="slide-preview bg-success d-flex align-items-center justify-content-center text-white">
+                                    <i class="fas fa-film fa-2x"></i>
+                                </div>` :
+                                `<div class="slide-preview bg-danger d-flex align-items-center justify-content-center text-white">
+                                    <i class="fab fa-youtube fa-2x"></i>
+                                </div>`
+                            }
+                        </div>
+                        <div class="col">
+                            <div class="row align-items-center">
+                                <div class="col-md-4">
+                                    <span class="badge badge-slide-type ${
+                                        slide.type === 'image' ? 'bg-primary' : 
+                                        slide.type === 'video' ? 'bg-success' : 
+                                        'bg-danger'
+                                    }">
+                                        ${slide.type === 'image' ? 'Imagen' : slide.type === 'video' ? 'Video Local' : 'YouTube'}
+                                    </span>
+                                    ${slide.type === 'youtube' ? `<br><small class="text-muted">ID: ${slide.video_id}</small>` : ''}
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label mb-0" style="font-size: 0.75rem;">Duración (s)</label>
+                                    <input type="number" class="form-control form-control-sm duration-input" 
+                                           data-slide-id="${slide.id}"
+                                           value="${slide.duration}" 
+                                           min="1" max="3600" disabled>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label mb-0" style="font-size: 0.75rem;">Transición</label>
+                                    <select class="form-select form-select-sm transition-select" 
+                                            data-slide-id="${slide.id}" disabled>
+                                        <option value="fade" ${slide.transition === 'fade' ? 'selected' : ''}>Fade</option>
+                                        <option value="slide" ${slide.transition === 'slide' ? 'selected' : ''}>Slide</option>
+                                        <option value="zoom" ${slide.transition === 'zoom' ? 'selected' : ''}>Zoom</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2 text-end">
+                                    <button class="btn btn-sm btn-warning btn-edit-slide" data-slide-id="${slide.id}">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-success btn-save-slide" data-slide-id="${slide.id}" style="display:none;">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-danger btn-delete-slide" data-slide-id="${slide.id}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Inicializar Sortable para drag & drop
+            if (sortable) sortable.destroy();
+            sortable = new Sortable(slidesList, {
+                animation: 150,
+                handle: '.drag-handle',
+                ghostClass: 'sortable-ghost',
+                onEnd: function(evt) {
+                    const slides = currentConfig.slides;
+                    const movedSlide = slides.splice(evt.oldIndex, 1)[0];
+                    slides.splice(evt.newIndex, 0, movedSlide);
+                    renderSlides();
+                }
+            });
+            
+            // Agregar event listeners a los botones
+            attachSlideEventListeners();
+        }
+        
+        function attachSlideEventListeners() {
+            // Botones de editar
+            document.querySelectorAll('.btn-edit-slide').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const slideId = this.getAttribute('data-slide-id');
+                    toggleEdit(slideId);
+                });
+            });
+            
+            // Botones de guardar
+            document.querySelectorAll('.btn-save-slide').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const slideId = this.getAttribute('data-slide-id');
+                    saveEdit(slideId);
+                });
+            });
+            
+            // Botones de eliminar
+            document.querySelectorAll('.btn-delete-slide').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const slideId = this.getAttribute('data-slide-id');
+                    deleteSlide(slideId);
+                });
+            });
+        }
+        
+        async function addSlide() {
+            const type = document.getElementById('contentType').value;
+            const duration = parseInt(document.getElementById('slideDuration').value);
+            const transition = document.getElementById('slideTransition').value;
+            
+            let slideData = {
+                id: generateSlideId(),
+                type,
+                duration,
+                transition
+            };
+            
+            if (type === 'image' || type === 'video') {
+                const fileInput = type === 'image' ? document.getElementById('imageFile') : document.getElementById('videoFile');
+                
+                if (!fileInput.files.length) {
+                    showToast(`Por favor selecciona ${type === 'image' ? 'una imagen' : 'un video'}`, 'warning');
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+                
+                // Mostrar indicador de carga
+                const btnAdd = document.getElementById('btnAddSlide');
+                const originalText = btnAdd.innerHTML;
+                btnAdd.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Subiendo...';
+                btnAdd.disabled = true;
+                
+                try {
+                    const response = await fetch('/api/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const result = await response.json();
+                    
+                    if (!result.success) {
+                        showToast(result.error, 'danger');
+                        btnAdd.innerHTML = originalText;
+                        btnAdd.disabled = false;
+                        return;
+                    }
+                    
+                    slideData.url = result.url;
+                    slideData.type = result.type;
+                    fileInput.value = '';
+                    
+                    btnAdd.innerHTML = originalText;
+                    btnAdd.disabled = false;
+                } catch (error) {
+                    showToast(`Error al subir ${type === 'image' ? 'imagen' : 'video'}`, 'danger');
+                    btnAdd.innerHTML = originalText;
+                    btnAdd.disabled = false;
+                    return;
+                }
+            } else if (type === 'youtube') {
+                const youtubeInput = document.getElementById('youtubeUrl').value.trim();
+                if (!youtubeInput) {
+                    showToast('Por favor ingresa el ID de YouTube', 'warning');
+                    return;
+                }
+                
+                // Validar que sea exactamente 11 caracteres alfanuméricos
+                if (!/^[a-zA-Z0-9_-]{11}$/.test(youtubeInput)) {
+                    showToast('ID de YouTube inválido. Debe tener exactamente 11 caracteres.', 'warning');
+                    return;
+                }
+                
+                // Solo guardamos el ID en el JSON
+                slideData.video_id = youtubeInput;
+                document.getElementById('youtubeUrl').value = '';
+            }
+            
+            currentConfig.slides.push(slideData);
+            renderSlides();
+            showToast('Slide agregado correctamente', 'success');
+        }
+        
+        function generateSlideId() {
+            return 'slide_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+        
+        function deleteSlide(slideId) {
+            if (confirm('¿Estás seguro de eliminar este slide?')) {
+                const index = currentConfig.slides.findIndex(s => s.id === slideId);
+                if (index !== -1) {
+                    currentConfig.slides.splice(index, 1);
+                    renderSlides();
+                    showToast('Slide eliminado', 'info');
+                }
+            }
+        }
+        
+        function toggleEdit(slideId) {
+            const slideElement = document.getElementById(`slide-item-${slideId}`);
+            const durationInput = slideElement.querySelector(`.duration-input[data-slide-id="${slideId}"]`);
+            const transitionSelect = slideElement.querySelector(`.transition-select[data-slide-id="${slideId}"]`);
+            const btnEdit = slideElement.querySelector(`.btn-edit-slide[data-slide-id="${slideId}"]`);
+            const btnSave = slideElement.querySelector(`.btn-save-slide[data-slide-id="${slideId}"]`);
+            
+            const isEditing = slideElement.classList.contains('editing');
+            
+            if (isEditing) {
+                // Cancelar edición
+                slideElement.classList.remove('editing');
+                durationInput.disabled = true;
+                transitionSelect.disabled = true;
+                btnEdit.innerHTML = '<i class="fas fa-edit"></i>';
+                btnEdit.classList.remove('btn-secondary');
+                btnEdit.classList.add('btn-warning');
+                btnSave.style.display = 'none';
+                
+                // Restaurar valores originales
+                const slide = currentConfig.slides.find(s => s.id === slideId);
+                if (slide) {
+                    durationInput.value = slide.duration;
+                    transitionSelect.value = slide.transition;
+                }
+            } else {
+                // Activar edición
+                slideElement.classList.add('editing');
+                durationInput.disabled = false;
+                transitionSelect.disabled = false;
+                btnEdit.innerHTML = '<i class="fas fa-times"></i>';
+                btnEdit.classList.remove('btn-warning');
+                btnEdit.classList.add('btn-secondary');
+                btnSave.style.display = 'inline-block';
+                
+                // Focus en el input de duración
+                durationInput.focus();
+            }
+        }
+        
+        function saveEdit(slideId) {
+            const slideElement = document.getElementById(`slide-item-${slideId}`);
+            const durationInput = slideElement.querySelector(`.duration-input[data-slide-id="${slideId}"]`);
+            const transitionSelect = slideElement.querySelector(`.transition-select[data-slide-id="${slideId}"]`);
+            
+            const slide = currentConfig.slides.find(s => s.id === slideId);
+            if (slide) {
+                slide.duration = parseInt(durationInput.value);
+                slide.transition = transitionSelect.value;
+                
+                // Desactivar modo edición
+                slideElement.classList.remove('editing');
+                durationInput.disabled = true;
+                transitionSelect.disabled = true;
+                
+                const btnEdit = slideElement.querySelector(`.btn-edit-slide[data-slide-id="${slideId}"]`);
+                const btnSave = slideElement.querySelector(`.btn-save-slide[data-slide-id="${slideId}"]`);
+                
+                btnEdit.innerHTML = '<i class="fas fa-edit"></i>';
+                btnEdit.classList.remove('btn-secondary');
+                btnEdit.classList.add('btn-warning');
+                btnSave.style.display = 'none';
+                
+                showToast('Cambios guardados. No olvides hacer clic en "Guardar Cambios"', 'success');
+            }
+        }
+        
+        function editSlide(index) {
+            // Función obsoleta mantenida por compatibilidad
+            const slide = currentConfig.slides[index];
+            if (slide && slide.id) {
+                toggleEdit(slide.id);
+            }
+        }
+        
+/*        async function saveConfiguration() {
+            try {
+                const response = await fetch(`/api/screen/${currentScreen}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(currentConfig)
+                });
+                
+                const result = await response.json();
+                showToast(result.message, 'success');
+                loadScreens();
+            } catch (error) {
+                showToast('Error al guardar configuración', 'danger');
+            }
+        }*/
+
+        async function saveConfiguration() {
+            if (currentScreen === null) return;
+
+            // CAPTURAR LOS DATOS DE LA MARQUESINA DESDE EL HTML
+            const marqueeEnabled = document.getElementById('marqueeEnabled').checked;
+            const marqueeText = document.getElementById('marqueeText').value;
+
+            // ARMAR EL PAQUETE (Asegúrate de incluir los campos nuevos aquí)
+            const dataToSend = {
+                // Mantenemos los slides que ya estaban en el objeto local
+                slides: currentConfig.slides,
+                // AGREGAMOS los nuevos valores de la marquesina
+                marquee_enabled: marqueeEnabled,
+                marquee_text: marqueeText
+            };
+
+            try {
+                const response = await fetch(`/api/screen/${currentScreen}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    // ENVIAR EL PAQUETE COMPLETO
+                    body: JSON.stringify(dataToSend)
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    showToast('Configuración guardada en el JSON', 'success');
+                    // Actualizamos nuestro objeto local para que esté sincronizado
+                    currentConfig.marquee_enabled = marqueeEnabled;
+                    currentConfig.marquee_text = marqueeText;
+                }
+            } catch (error) {
+                showToast('Error al conectar con el servidor', 'danger');
+            }
+        }
+
+        
+        async function generatePresentation() {
+            if (!currentConfig.slides.length) {
+                showToast('Agrega al menos un slide antes de generar la presentación', 'warning');
+                return;
+            }
+            
+            // Guardar primero
+            await saveConfiguration();
+            
+            try {
+                const response = await fetch(`/api/generate/${currentScreen}`, {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showToast(result.message, 'success');
+                    const btnView = document.getElementById('btnViewPresentation');
+                    btnView.href = result.url;
+                    btnView.style.display = 'block';
+                } else {
+                    showToast(result.error, 'danger');
+                }
+            } catch (error) {
+                showToast('Error al generar presentación', 'danger');
+            }
+        }
+        
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const toastBody = toast.querySelector('.toast-body');
+            toastBody.textContent = message;
+            toast.className = `toast bg-${type} text-white`;
+            const bsToast = new bootstrap.Toast(toast);
+            bsToast.show();
+        }
+    </script>
+</body>
+</html>
